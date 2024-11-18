@@ -1,7 +1,6 @@
 const { MongoClient } = require('mongodb');
 
-// נעדכן את זה בהמשך עם ה-connection string שלך
-const url = 'mongodb+srv://diamanta:didi2008_%23@cluster0.obk35.mongodb.net/experiment_db?retryWrites=true&w=majority';
+const url = process.env.MONGODB_URI || 'mongodb+srv://diamanta:didi2008_%23@cluster0.obk35.mongodb.net/experiment_db?retryWrites=true&w=majority';
 const dbName = 'experiment_db';
 
 class DatabaseConnection {
