@@ -1,0 +1,19 @@
+{
+  "name": "webexpiriment",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Web-based experimental task",
+  "dependencies": {
+    "express": "^4.21.1",
+    "mongodb": "^6.10.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
