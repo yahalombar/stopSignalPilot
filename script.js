@@ -11,7 +11,7 @@ const config = {
         max: 2000
     },
     stopRatio: 0.25,
-    trialsPerTask: 5
+    trialsPerTask: 100
 };
 
 // Task stimuli and mappings
