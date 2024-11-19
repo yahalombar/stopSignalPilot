@@ -1,109 +1,38 @@
-// ... (previous config and tasks objects remain the same)
+const { MongoClient } = require('mongodb');
 
-class ExperimentManager {
-    constructor() {
-        this.stimulusContainer = document.getElementById("stimulus-container");
-        this.instructions = document.getElementById("instructions");
-        this.currentPhase = 'welcome';
-        
-        // Experiment state
-        this.currentTask = null;
-        this.currentSSD = config.initialSSD;
-        this.results = [];
-        this.trialIndex = 0;
-        this.stopTrials = null;
-        this.isWaitingForResponse = false;
-        
-        // Bind methods
-        this.handleKeyPress = this.handleKeyPress.bind(this);
-        this.handleInstructionKeyPress = this.handleInstructionKeyPress.bind(this);
-    }
+// כתובת החיבור ל-MongoDB Atlas
+const url = 'mongodb+srv://diamanta:didi2008_%23@cluster0.obk35.mongodb.net/experiment_db?retryWrites=true&w=majority';
+const dbName = 'experiment_db';
+const collectionName = 'experiment_results';
 
-    clearInstructions() {
-        this.instructions.style.display = 'none';
-        this.stimulusContainer.style.marginTop = '0';  // Adjust spacing after instructions are hidden
-    }
+async function checkDatabaseAndCollection() {
+    const client = new MongoClient(url, {
+        serverSelectionTimeoutMS: 30000, // 30 שניות
+        connectTimeoutMS: 30000
+    });
 
-    showInstructionsElement() {
-        this.instructions.style.display = 'block';
-        this.stimulusContainer.style.marginTop = '2em';
-    }
+    try {
+        console.log('Trying to connect to MongoDB...');
+        await client.connect();
+        console.log(`Connected to database: ${dbName}`);
 
-    async showInstructions(phase) {
-        this.showInstructionsElement();
-        this.currentPhase = phase;
-        this.instructions.textContent = instructions[phase];
-        
-        return new Promise(resolve => {
-            this.resolveInstruction = () => {
-                document.removeEventListener('keydown', this.handleInstructionKeyPress);
-                this.resolveInstruction = null;
-                if (phase !== 'completed') {
-                    this.clearInstructions();
-                }
-                resolve();
-            };
-            document.addEventListener('keydown', this.handleInstructionKeyPress);
-        });
-    }
+        const db = client.db(dbName);
 
-    async runTrial() {
-        const taskConfig = tasks[this.currentTask];
-        const stimulusType = this.selectRandomStimulus(taskConfig.stimuli);
-        const isStopTrial = this.stopTrials[this.trialIndex];
-        
-        // Ensure instructions are hidden during trial
-        this.clearInstructions();
-        
-        // Display stimulus
-        this.stimulusContainer.textContent = taskConfig.stimuli[stimulusType];
-        const trialStartTime = Date.now();
-        
-        // ... (rest of runTrial method remains the same)
-    }
-
-    async start() {
-        try {
-            // Welcome and consent
-            await this.showInstructions('welcome');
-            await this.showInstructions('consent');
-            
-            // Simple task
-            await this.showInstructions('simpleTask');
-            this.currentTask = "simple";
-            this.stopTrials = this.generateStopTrials();
-            for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
-                await this.runTrial();
-            }
-            
-            // Break between tasks
-            this.showInstructionsElement(); // Show instructions element for break
-            await this.showInstructions('break');
-            
-            // Complex task
-            await this.showInstructions('complexTask');
-            this.currentTask = "complex";
-            this.stopTrials = this.generateStopTrials();
-            for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
-                await this.runTrial();
-            }
-            
-            // Completion
-            this.showInstructionsElement(); // Show instructions element for completion
-            await this.showInstructions('completed');
-            console.log("Results:", this.results);
-            
-        } catch (error) {
-            console.error("Error during experiment:", error);
-            this.endExperiment();
+        // בדיקת האם הקולקציה קיימת
+        const collections = await db.listCollections({ name: collectionName }).toArray();
+        if (collections.length > 0) {
+            console.log(`Collection "${collectionName}" exists.`);
+        } else {
+            console.log(`Collection "${collectionName}" does not exist. Creating it now...`);
+            await db.createCollection(collectionName);
+            console.log(`Collection "${collectionName}" created successfully.`);
         }
+    } catch (error) {
+        console.error('Error:', error.message);
+    } finally {
+        await client.close();
+        console.log('Connection closed.');
     }
-
-    // ... (rest of the class methods remain the same)
 }
 
-// Start experiment when page loads
-window.addEventListener('load', () => {
-    const experiment = new ExperimentManager();
-    experiment.start();
-});
+checkDatabaseAndCollection();

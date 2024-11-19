@@ -40,7 +40,7 @@ const tasks = {
             hash: "k",
             star: "l"
         },
-        reminder: " ▲ - S |  ■ - A | # - K | ★ - L"
+        reminder: "  ■ - A | ▲ - S | # - K | ★ - L"
     }
 };
 
@@ -110,6 +110,9 @@ class ExperimentManager {
         this.instructions = document.getElementById("instructions");
         this.keyReminder = document.getElementById("key-reminder");
         this.currentPhase = 'welcome';
+        this.demographicForm = document.getElementById('demographic-form');
+        this.startButton = document.getElementById('start-experiment');
+        this.participantData = null;
         
         // Experiment state
         this.currentTask = null;
@@ -122,6 +125,32 @@ class ExperimentManager {
         // Bind methods
         this.handleKeyPress = this.handleKeyPress.bind(this);
         this.handleInstructionKeyPress = this.handleInstructionKeyPress.bind(this);
+        this.startButton.addEventListener('click', () => this.handleDemographicSubmit());
+
+    }
+
+    handleDemographicSubmit() {
+        const age = document.getElementById('age').value;
+        const gender = document.getElementById('gender').value;
+        const hand = document.getElementById('hand').value;
+    
+        // בדיקת תקינות
+        if (!age || !gender || !hand) {
+            alert('Please fill in all fields');
+            return;
+        }
+    
+        // שמירת המידע הדמוגרפי
+        this.participantData = {
+            age: parseInt(age),
+            gender,
+            hand,
+            timestamp: new Date().toISOString()
+        };
+    
+        // הסתרת הטופס והמשך הניסוי
+        this.demographicForm.style.display = 'none';
+        this.startExperiment();
     }
 
     clearInstructions() {
@@ -148,6 +177,11 @@ class ExperimentManager {
             this.resolveInstruction();
         } else if (event.code === 'Escape') {
             this.endExperiment();
+        } else if (event.code === 'Tab') {
+            event.preventDefault(); // למנוע את ברירת המחדל של Tab
+            if (this.skipBlock) {
+                this.skipBlock();
+            }
         }
     }
 
@@ -237,10 +271,10 @@ class ExperimentManager {
         this.showInstructionsElement();
         this.instructions.textContent = "Experiment ended. Thank you for your participation.";
         
-        // שמירת התוצאות
         try {
             const participantData = {
                 participantId: Date.now().toString(),
+                demographic: this.participantData,  // הוספת המידע הדמוגרפי
                 results: this.results
             };
             
@@ -355,6 +389,11 @@ class ExperimentManager {
     }
 
     async start() {
+        // הצג את הטופס הדמוגרפי מיד בהתחלה
+        this.demographicForm.style.display = 'flex';
+    }
+    
+    async startExperiment() {
         try {
             // Welcome and consent
             await this.showInstructions('welcome');
@@ -363,9 +402,18 @@ class ExperimentManager {
             await this.showInstructions('simpleTask');
             this.currentTask = "simple";
             this.stopTrials = this.generateStopTrials();
+            
+            // הוספת אפשרות לדילוג על הבלוק הראשון
+            this.skipBlock = () => {
+                this.trialIndex = config.trialsPerTask; // קפיצה לסוף הבלוק
+                this.skipBlock = null; // מניעת דילוג כפול
+            };
+            
             for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
+                if (this.trialIndex >= config.trialsPerTask) break; // בדיקה אם דילגנו
                 await this.runTrial();
             }
+            console.log(`Completed/Skipped simple task with ${this.results.length} trials`);
             
             // Break between tasks
             this.keyReminder.style.display = 'none';
@@ -375,9 +423,19 @@ class ExperimentManager {
             await this.showInstructions('complexTask');
             this.currentTask = "complex";
             this.stopTrials = this.generateStopTrials();
+            
+            // הוספת אפשרות לדילוג על הבלוק השני ומעבר לסיום
+            this.skipBlock = () => {
+                this.trialIndex = config.trialsPerTask;
+                this.skipBlock = null;
+                this.endExperiment();
+            };
+            
             for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
+                if (this.trialIndex >= config.trialsPerTask) break;
                 await this.runTrial();
             }
+            console.log(`Completed/Skipped complex task with ${this.results.length} trials`);
             
             // Completion
             this.keyReminder.style.display = 'none';
