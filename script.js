@@ -1,4 +1,4 @@
-// Experiment configuration
+// configuration
 const config = {
     initialSSD: 500,
     stepSSD: 50,
@@ -11,10 +11,10 @@ const config = {
         max: 2000
     },
     stopRatio: 0.25,
-    trialsPerTask: 5
+    trialsPerTask: 200
 };
 
-// Task stimuli and mappings
+// Task  mappings
 const tasks = {
     simple: {
         stimuli: {
@@ -44,7 +44,7 @@ const tasks = {
     }
 };
 
-// Instructions object
+// Instructions 
 const instructions = {
     welcome: `
     In the upcoming experiment, you will be exposed to different shapes and will be instructed to respond using different keys.
@@ -140,7 +140,7 @@ class ExperimentManager {
         this.stopTrials = null;
         this.isWaitingForResponse = false;
         
-        // Bind methods
+
         this.handleKeyPress = this.handleKeyPress.bind(this);
         this.handleInstructionKeyPress = this.handleInstructionKeyPress.bind(this);
         this.startButton.addEventListener('click', () => this.handleDemographicSubmit());
@@ -261,7 +261,7 @@ class ExperimentManager {
             ...Array(numGoTrials).fill(false)
         ];
         
-        // Fisher-Yates shuffle
+        
         for (let i = trials.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [trials[i], trials[j]] = [trials[j], trials[i]];
@@ -311,6 +311,7 @@ class ExperimentManager {
     }
 
     async runTrial() {
+        this.stimulusContainer.style.display = 'block';
         const taskConfig = tasks[this.currentTask];
         const stimulusType = this.selectRandomStimulus(taskConfig.stimuli);
         const isStopTrial = this.stopTrials[this.trialIndex];
@@ -353,6 +354,7 @@ class ExperimentManager {
                     correct = false;
                     this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
                     responseTime = result.time - trialStartTime;
+                    
                 }
             } else {
                 const result = await Promise.race([
@@ -390,146 +392,22 @@ class ExperimentManager {
         );
     }
 
-    async runPracticeTrials() {
-        await this.showInstructions('practice');
-        
-        console.log("Starting practice trials...");
-        const practiceTrials = 10;
-        const numStopTrials = 4;
-        
-        let trials = Array(practiceTrials).fill(false);
-        let stopTrialIndices = [];
-        while (stopTrialIndices.length < numStopTrials) {
-            const randomIndex = Math.floor(Math.random() * practiceTrials);
-            if (!stopTrialIndices.includes(randomIndex)) {
-                stopTrialIndices.push(randomIndex);
-                trials[randomIndex] = true;
-            }
-        }
-        
-        let totalGoTrials = practiceTrials - numStopTrials;
-        let correctResponses = 0;
-        let successfulStops = 0;
-        
-        this.currentSSD = config.initialSSD;
-    
-        for (let i = 0; i < practiceTrials; i++) {
-            const isStopTrial = trials[i];
-            const currentTrialSSD = this.currentSSD; // שומר את ה-SSD הנוכחי לניסיון זה
-            
-            this.stimulusContainer.textContent = "↑";
-            const trialStartTime = Date.now();
-            this.isWaitingForResponse = true;
-            let responseReceived = false;
-            let stopSignalTimer = null;
-            let stopSignalShown = false;
-    
-            const responsePromise = new Promise(resolve => {
-                const handleSpace = (event) => {
-                    if (event.code === 'Space' && this.isWaitingForResponse) {
-                        document.removeEventListener('keydown', handleSpace);
-                        responseReceived = true;
-                        const responseTime = Date.now() - trialStartTime;
-                        
-                        if (isStopTrial && responseTime >= currentTrialSSD && !stopSignalShown) {
-                            // אם הגיע הזמן להציג את הסטופ סיגנל והוא עוד לא הוצג
-                            clearTimeout(stopSignalTimer);
-                            this.stimulusContainer.textContent = "X";
-                            this.stimulusContainer.style.color = "red";
-                            stopSignalShown = true;
-                        }
-                        
-                        resolve({ time: Date.now() });
-                    }
-                };
-                document.addEventListener('keydown', handleSpace);
-                
-                if (isStopTrial) {
-                    stopSignalTimer = setTimeout(() => {
-                        if (this.isWaitingForResponse) {
-                            this.stimulusContainer.textContent = "X";
-                            this.stimulusContainer.style.color = "red";
-                            stopSignalShown = true;
-                        }
-                    }, currentTrialSSD);
-                }
-                
-                setTimeout(() => {
-                    document.removeEventListener('keydown', handleSpace);
-                    resolve(null);
-                }, config.goDuration);
-            });
-    
-            if (isStopTrial) {
-                const response = await responsePromise;
-                
-                if (!responseReceived) {
-                    successfulStops++;
-                    this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
-                } else {
-                    this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
-                }
-            } else {
-                const response = await responsePromise;
-                if (responseReceived) {
-                    correctResponses++;
-                }
-            }
-    
-            // איפוס התצוגה
-            this.isWaitingForResponse = false;
-            this.stimulusContainer.style.color = "black";
-            this.stimulusContainer.textContent = "";
-    
-            // המתנה בין ניסיונות
-            await new Promise(resolve => 
-                setTimeout(resolve, 
-                    Math.random() * (config.interTrialInterval.max - config.interTrialInterval.min) 
-                    + config.interTrialInterval.min
-                )
-            );
-        }
-    
-        // הצגת תוצאות האימון
-        const feedbackText = `
-        Your performance:
-        - You correctly pressed SPACE ${correctResponses} times out of ${totalGoTrials} opportunities
-        - You successfully stopped ${successfulStops} times out of ${numStopTrials} stop signals
-        
-       
-        `;
-        
-        this.instructions.textContent = instructions.practiceComplete.replace('%FEEDBACK%', feedbackText);
-        this.showInstructionsElement();
-        
-        return new Promise(resolve => {
-            const handler = (event) => {
-                if (event.code === 'Space') {
-                    document.removeEventListener('keydown', handler);
-                    this.clearInstructions();
-                    resolve();
-                }
-            };
-            document.addEventListener('keydown', handler);
-        });
-    }
-
 async start() {
     this.demographicForm.style.display = 'flex';
 }
 
 async startExperiment() {
     try {
-        // Welcome and consent
+       
         await this.showInstructions('welcome');
         //await this.showInstructions('consent');
         
-        // Run practice session
         await this.runPracticeTrials();
 
         // Simple task
         await this.showInstructions('simpleTask');
         this.currentTask = "simple";
+        this.currentSSD = config.initialSSD;
         this.stopTrials = this.generateStopTrials();
         
         this.skipBlock = () => {
@@ -542,7 +420,7 @@ async startExperiment() {
             await this.runTrial();
         }
         
-        // Break between tasks
+
         this.keyReminder.style.display = 'none';
         await this.showInstructions('break');
         
@@ -563,7 +441,6 @@ async startExperiment() {
             await this.runTrial();
         }
         
-        // Completion
         this.keyReminder.style.display = 'none';
         await this.showInstructions('completed');
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -684,7 +561,7 @@ async runPracticeTrials() {
     }
 
     this.stimulusContainer.style.display = 'none';
-    // הצגת תוצאות האימון
+
     const feedbackText = `
     Your performance:
     - You correctly pressed SPACE ${correctResponses} times out of ${totalGoTrials} opportunities
@@ -713,7 +590,6 @@ cleanup() {
 }
 }
 
-// Start experiment when page loads
 window.addEventListener('load', () => {
 const experiment = new ExperimentManager();
 experiment.start();

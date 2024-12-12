@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
-// CORS middleware
+
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -10,15 +10,15 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
  
-// API routes
+
 const api = require('./api');
 app.use('/api', api);
 
-// Serve index.html
+
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
