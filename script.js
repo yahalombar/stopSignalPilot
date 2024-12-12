@@ -11,7 +11,7 @@ const config = {
         max: 2000
     },
     stopRatio: 0.25,
-    trialsPerTask: 100
+    trialsPerTask: 5
 };
 
 // Task stimuli and mappings
@@ -52,6 +52,25 @@ const instructions = {
     you must complete the entire experiment to receive payment.
     
     Press SPACE to continue.
+    `,
+    
+    practice: `
+    Practice Session
+    
+    In this practice session, you will learn how to perform the task.
+    
+    When you see an UP ARROW (↑), press the SPACE key.
+    If you see a red X appear, try to stop yourself from pressing any key.
+    
+    Press SPACE to start the practice.
+    `,
+    
+    practiceComplete: `
+    Practice session completed!
+    
+    %FEEDBACK%
+    
+    Press SPACE to continue to the real experiment.
     `,
     
     consent: `
@@ -103,7 +122,6 @@ const instructions = {
     `
 };
 
-
 class ExperimentManager {
     constructor() {
         this.stimulusContainer = document.getElementById("stimulus-container");
@@ -126,7 +144,6 @@ class ExperimentManager {
         this.handleKeyPress = this.handleKeyPress.bind(this);
         this.handleInstructionKeyPress = this.handleInstructionKeyPress.bind(this);
         this.startButton.addEventListener('click', () => this.handleDemographicSubmit());
-
     }
 
     handleDemographicSubmit() {
@@ -134,13 +151,11 @@ class ExperimentManager {
         const gender = document.getElementById('gender').value;
         const hand = document.getElementById('hand').value;
     
-        // בדיקת תקינות
         if (!age || !gender || !hand) {
             alert('Please fill in all fields');
             return;
         }
     
-        // שמירת המידע הדמוגרפי
         this.participantData = {
             age: parseInt(age),
             gender,
@@ -148,7 +163,6 @@ class ExperimentManager {
             timestamp: new Date().toISOString()
         };
     
-        // הסתרת הטופס והמשך הניסוי
         this.demographicForm.style.display = 'none';
         this.startExperiment();
     }
@@ -178,7 +192,7 @@ class ExperimentManager {
         } else if (event.code === 'Escape') {
             this.endExperiment();
         } else if (event.code === 'Tab') {
-            event.preventDefault(); // למנוע את ברירת המחדל של Tab
+            event.preventDefault();
             if (this.skipBlock) {
                 this.skipBlock();
             }
@@ -188,11 +202,9 @@ class ExperimentManager {
     handleKeyPress(event) {
         if (!this.isWaitingForResponse) return;
         
-        // Get both the key and the code of the pressed key
         const key = event.key.toLowerCase();
         const code = event.code.toLowerCase();
         
-        // Valid keys for each task (both English and Hebrew layout will work)
         const validKeys = this.currentTask === "simple" ? 
             {
                 's': ['keys', 'keyש'],
@@ -205,7 +217,6 @@ class ExperimentManager {
                 'l': ['keyl', 'keyל']
             };
         
-        // Check if the pressed key matches any of our valid keys
         let pressedKey = null;
         for (const [targetKey, possibleCodes] of Object.entries(validKeys)) {
             if (key === targetKey || possibleCodes.includes(code)) {
@@ -226,12 +237,10 @@ class ExperimentManager {
         this.currentPhase = phase;
         this.instructions.textContent = instructions[phase];
         
-        // אם זה מסך הסיום, המשך אוטומטית
         if (phase === 'completed') {
             return Promise.resolve();
         }
         
-        // אחרת, חכה ללחיצת מקש רווח
         return new Promise(resolve => {
             this.resolveInstruction = () => {
                 document.removeEventListener('keydown', this.handleInstructionKeyPress);
@@ -274,7 +283,7 @@ class ExperimentManager {
         try {
             const participantData = {
                 participantId: Date.now().toString(),
-                demographic: this.participantData,  // הוספת המידע הדמוגרפי
+                demographic: this.participantData,
                 results: this.results
             };
             
@@ -306,14 +315,10 @@ class ExperimentManager {
         const stimulusType = this.selectRandomStimulus(taskConfig.stimuli);
         const isStopTrial = this.stopTrials[this.trialIndex];
         
-        // Ensure instructions are hidden during trial
         this.clearInstructions();
         this.updateKeyReminder();
         
-        // Set data attribute for specific styling
         this.stimulusContainer.setAttribute('data-symbol', taskConfig.stimuli[stimulusType]);
-        
-        // Display stimulus
         this.stimulusContainer.textContent = taskConfig.stimuli[stimulusType];
         const trialStartTime = Date.now();
         
@@ -365,7 +370,6 @@ class ExperimentManager {
             this.isWaitingForResponse = false;
         }
 
-        // Save trial results
         this.results.push({
             taskType: this.currentTask,
             stimulusType,
@@ -375,11 +379,9 @@ class ExperimentManager {
             ssd: this.currentSSD
         });
 
-        // Reset stimulus display
         this.stimulusContainer.style.color = "black";
         this.stimulusContainer.textContent = "";
 
-        // Wait for inter-trial interval
         await new Promise(resolve => 
             setTimeout(resolve, 
                 Math.random() * (config.interTrialInterval.max - config.interTrialInterval.min) 
@@ -388,76 +390,331 @@ class ExperimentManager {
         );
     }
 
-    async start() {
-        // הצג את הטופס הדמוגרפי מיד בהתחלה
-        this.demographicForm.style.display = 'flex';
-    }
-    
-    async startExperiment() {
-        try {
-            // Welcome and consent
-            await this.showInstructions('welcome');
-            
-            // Simple task
-            await this.showInstructions('simpleTask');
-            this.currentTask = "simple";
-            this.stopTrials = this.generateStopTrials();
-            
-            // הוספת אפשרות לדילוג על הבלוק הראשון
-            this.skipBlock = () => {
-                this.trialIndex = config.trialsPerTask; // קפיצה לסוף הבלוק
-                this.skipBlock = null; // מניעת דילוג כפול
-            };
-            
-            for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
-                if (this.trialIndex >= config.trialsPerTask) break; // בדיקה אם דילגנו
-                await this.runTrial();
+    async runPracticeTrials() {
+        await this.showInstructions('practice');
+        
+        console.log("Starting practice trials...");
+        const practiceTrials = 10;
+        const numStopTrials = 4;
+        
+        let trials = Array(practiceTrials).fill(false);
+        let stopTrialIndices = [];
+        while (stopTrialIndices.length < numStopTrials) {
+            const randomIndex = Math.floor(Math.random() * practiceTrials);
+            if (!stopTrialIndices.includes(randomIndex)) {
+                stopTrialIndices.push(randomIndex);
+                trials[randomIndex] = true;
             }
-            console.log(`Completed/Skipped simple task with ${this.results.length} trials`);
-            
-            // Break between tasks
-            this.keyReminder.style.display = 'none';
-            await this.showInstructions('break');
-            
-            // Complex task
-            await this.showInstructions('complexTask');
-            this.currentTask = "complex";
-            this.stopTrials = this.generateStopTrials();
-            
-            // הוספת אפשרות לדילוג על הבלוק השני ומעבר לסיום
-            this.skipBlock = () => {
-                this.trialIndex = config.trialsPerTask;
-                this.skipBlock = null;
-                this.endExperiment();
-            };
-            
-            for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
-                if (this.trialIndex >= config.trialsPerTask) break;
-                await this.runTrial();
-            }
-            console.log(`Completed/Skipped complex task with ${this.results.length} trials`);
-            
-            // Completion
-            this.keyReminder.style.display = 'none';
-            await this.showInstructions('completed');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            console.log("Results:", this.results);
-            await this.endExperiment();
-            
-        } catch (error) {
-            console.error("Error during experiment:", error);
-            this.endExperiment();
         }
+        
+        let totalGoTrials = practiceTrials - numStopTrials;
+        let correctResponses = 0;
+        let successfulStops = 0;
+        
+        this.currentSSD = config.initialSSD;
+    
+        for (let i = 0; i < practiceTrials; i++) {
+            const isStopTrial = trials[i];
+            const currentTrialSSD = this.currentSSD; // שומר את ה-SSD הנוכחי לניסיון זה
+            
+            this.stimulusContainer.textContent = "↑";
+            const trialStartTime = Date.now();
+            this.isWaitingForResponse = true;
+            let responseReceived = false;
+            let stopSignalTimer = null;
+            let stopSignalShown = false;
+    
+            const responsePromise = new Promise(resolve => {
+                const handleSpace = (event) => {
+                    if (event.code === 'Space' && this.isWaitingForResponse) {
+                        document.removeEventListener('keydown', handleSpace);
+                        responseReceived = true;
+                        const responseTime = Date.now() - trialStartTime;
+                        
+                        if (isStopTrial && responseTime >= currentTrialSSD && !stopSignalShown) {
+                            // אם הגיע הזמן להציג את הסטופ סיגנל והוא עוד לא הוצג
+                            clearTimeout(stopSignalTimer);
+                            this.stimulusContainer.textContent = "X";
+                            this.stimulusContainer.style.color = "red";
+                            stopSignalShown = true;
+                        }
+                        
+                        resolve({ time: Date.now() });
+                    }
+                };
+                document.addEventListener('keydown', handleSpace);
+                
+                if (isStopTrial) {
+                    stopSignalTimer = setTimeout(() => {
+                        if (this.isWaitingForResponse) {
+                            this.stimulusContainer.textContent = "X";
+                            this.stimulusContainer.style.color = "red";
+                            stopSignalShown = true;
+                        }
+                    }, currentTrialSSD);
+                }
+                
+                setTimeout(() => {
+                    document.removeEventListener('keydown', handleSpace);
+                    resolve(null);
+                }, config.goDuration);
+            });
+    
+            if (isStopTrial) {
+                const response = await responsePromise;
+                
+                if (!responseReceived) {
+                    successfulStops++;
+                    this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
+                } else {
+                    this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
+                }
+            } else {
+                const response = await responsePromise;
+                if (responseReceived) {
+                    correctResponses++;
+                }
+            }
+    
+            // איפוס התצוגה
+            this.isWaitingForResponse = false;
+            this.stimulusContainer.style.color = "black";
+            this.stimulusContainer.textContent = "";
+    
+            // המתנה בין ניסיונות
+            await new Promise(resolve => 
+                setTimeout(resolve, 
+                    Math.random() * (config.interTrialInterval.max - config.interTrialInterval.min) 
+                    + config.interTrialInterval.min
+                )
+            );
+        }
+    
+        // הצגת תוצאות האימון
+        const feedbackText = `
+        Your performance:
+        - You correctly pressed SPACE ${correctResponses} times out of ${totalGoTrials} opportunities
+        - You successfully stopped ${successfulStops} times out of ${numStopTrials} stop signals
+        
+       
+        `;
+        
+        this.instructions.textContent = instructions.practiceComplete.replace('%FEEDBACK%', feedbackText);
+        this.showInstructionsElement();
+        
+        return new Promise(resolve => {
+            const handler = (event) => {
+                if (event.code === 'Space') {
+                    document.removeEventListener('keydown', handler);
+                    this.clearInstructions();
+                    resolve();
+                }
+            };
+            document.addEventListener('keydown', handler);
+        });
     }
 
-    cleanup() {
-        document.removeEventListener('keydown', this.handleInstructionKeyPress);
-        document.removeEventListener('keydown', this.handleKeyPress);
+async start() {
+    this.demographicForm.style.display = 'flex';
+}
+
+async startExperiment() {
+    try {
+        // Welcome and consent
+        await this.showInstructions('welcome');
+        //await this.showInstructions('consent');
+        
+        // Run practice session
+        await this.runPracticeTrials();
+
+        // Simple task
+        await this.showInstructions('simpleTask');
+        this.currentTask = "simple";
+        this.stopTrials = this.generateStopTrials();
+        
+        this.skipBlock = () => {
+            this.trialIndex = config.trialsPerTask;
+            this.skipBlock = null;
+        };
+        
+        for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
+            if (this.trialIndex >= config.trialsPerTask) break;
+            await this.runTrial();
+        }
+        
+        // Break between tasks
+        this.keyReminder.style.display = 'none';
+        await this.showInstructions('break');
+        
+        // Complex task
+        await this.showInstructions('complexTask');
+        this.currentTask = "complex";
+        this.currentSSD = config.initialSSD;
+        this.stopTrials = this.generateStopTrials();
+        
+        this.skipBlock = () => {
+            this.trialIndex = config.trialsPerTask;
+            this.skipBlock = null;
+            this.endExperiment();
+        };
+        
+        for (this.trialIndex = 0; this.trialIndex < config.trialsPerTask; this.trialIndex++) {
+            if (this.trialIndex >= config.trialsPerTask) break;
+            await this.runTrial();
+        }
+        
+        // Completion
+        this.keyReminder.style.display = 'none';
+        await this.showInstructions('completed');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await this.endExperiment();
+        
+    } catch (error) {
+        console.error("Error during experiment:", error);
+        this.endExperiment();
     }
+}
+
+async runPracticeTrials() {
+    await this.showInstructions('practice');
+    
+    console.log("Starting practice trials...");
+    const practiceTrials = 10;
+    const numStopTrials = 4;
+    
+    let trials = Array(practiceTrials).fill(false);
+    let stopTrialIndices = [];
+    while (stopTrialIndices.length < numStopTrials) {
+        const randomIndex = Math.floor(Math.random() * practiceTrials);
+        if (!stopTrialIndices.includes(randomIndex)) {
+            stopTrialIndices.push(randomIndex);
+            trials[randomIndex] = true;
+        }
+    }
+    
+    let totalGoTrials = practiceTrials - numStopTrials;
+    let correctResponses = 0;
+    let successfulStops = 0;
+    
+    this.currentSSD = config.initialSSD;
+
+    for (let i = 0; i < practiceTrials; i++) {
+        const isStopTrial = trials[i];
+        const currentTrialSSD = this.currentSSD; 
+        
+        this.stimulusContainer.textContent = "↑";
+        this.stimulusContainer.style.color = "black";
+        const trialStartTime = Date.now();
+        this.isWaitingForResponse = true;
+        let responseReceived = false;
+        let stopSignalTimer = null;
+        let stopSignalShown = false;
+
+        const responsePromise = new Promise(resolve => {
+            const handleSpace = (event) => {
+                if (event.code === 'Space' && this.isWaitingForResponse) {
+                    document.removeEventListener('keydown', handleSpace);
+                    responseReceived = true;
+                    const responseTime = Date.now() - trialStartTime;
+                    
+                    if (isStopTrial && responseTime >= currentTrialSSD && !stopSignalShown) {
+
+                        clearTimeout(stopSignalTimer);
+                        this.stimulusContainer.textContent = "X";
+                        this.stimulusContainer.style.color = "red";
+                        stopSignalShown = true;
+                    }
+                    
+                    resolve({ time: Date.now() });
+                }
+            };
+            document.addEventListener('keydown', handleSpace);
+            
+            if (isStopTrial) {
+                stopSignalTimer = setTimeout(() => {
+                    if (this.isWaitingForResponse) {
+                        this.stimulusContainer.textContent = "X";
+                        this.stimulusContainer.style.color = "red";
+                        stopSignalShown = true;
+                    }
+                }, currentTrialSSD);
+            }
+            
+            setTimeout(() => {
+                document.removeEventListener('keydown', handleSpace);
+                resolve(null);
+            }, config.goDuration);
+        });
+
+        if (isStopTrial) {
+            const response = await responsePromise;
+            
+            if (!responseReceived) {
+                successfulStops++;
+                this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
+            } else {
+                this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
+                clearTimeout(stopSignalTimer);
+                
+               
+                setTimeout(() => {
+                    this.stimulusContainer.textContent = "X";
+                    this.stimulusContainer.style.color = "red";
+                }, 10);
+            }
+        } else {
+            const response = await responsePromise;
+            if (responseReceived) {
+                correctResponses++;
+            }
+        }
+
+        // איפוס התצוגה
+        this.isWaitingForResponse = false;
+        this.stimulusContainer.style.color = "black";
+        this.stimulusContainer.textContent = "";
+
+        // המתנה בין ניסיונות
+        await new Promise(resolve => 
+            setTimeout(resolve, 
+                Math.random() * (config.interTrialInterval.max - config.interTrialInterval.min) 
+                + config.interTrialInterval.min
+            )
+        );
+    }
+
+    this.stimulusContainer.style.display = 'none';
+    // הצגת תוצאות האימון
+    const feedbackText = `
+    Your performance:
+    - You correctly pressed SPACE ${correctResponses} times out of ${totalGoTrials} opportunities
+    - You successfully stopped ${successfulStops} times out of ${numStopTrials} stop signals
+
+    `;
+    
+    this.instructions.textContent = instructions.practiceComplete.replace('%FEEDBACK%', feedbackText);
+    this.showInstructionsElement();
+    
+    return new Promise(resolve => {
+        const handler = (event) => {
+            if (event.code === 'Space') {
+                document.removeEventListener('keydown', handler);
+                this.clearInstructions();
+                resolve();
+            }
+        };
+        document.addEventListener('keydown', handler);
+    });
+}
+
+cleanup() {
+    document.removeEventListener('keydown', this.handleInstructionKeyPress);
+    document.removeEventListener('keydown', this.handleKeyPress);
+}
 }
 
 // Start experiment when page loads
 window.addEventListener('load', () => {
-    const experiment = new ExperimentManager();
-    experiment.start();
+const experiment = new ExperimentManager();
+experiment.start();
 });

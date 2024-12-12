@@ -13,7 +13,7 @@ app.use((req, res, next) => {
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
-
+ 
 // API routes
 const api = require('./api');
 app.use('/api', api);
