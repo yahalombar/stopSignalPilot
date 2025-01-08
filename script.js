@@ -4,7 +4,11 @@ const config = {
     stepSSD: 50,
     maxSSD: 1000,
     minSSD: 100,
-    goDuration: 1500,
+    goDuration: {
+        simple: 700,   
+        complex: 900,   
+        practice: 700   
+    },
     stopSignalDuration: 200,
     interTrialInterval: {
         min: 1000,
@@ -341,25 +345,31 @@ class ExperimentManager {
                         this.stimulusContainer.style.color = "red";
                     }
                 }, this.currentSSD);
-
+            
                 const result = await Promise.race([
                     responsePromise,
-                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration))
+                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration[this.currentTask]))
                 ]);
-
+            
                 if (!result) {
                     correct = true;
                     this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 } else {
                     correct = false;
                     this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
                     responseTime = result.time - trialStartTime;
                     
+                    // מציג X אדום לזמן ארוך יותר
+                    this.stimulusContainer.textContent = "X";
+                    this.stimulusContainer.style.color = "red";
+                    // נמתין 1000ms נוספות להצגת ה-X
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             } else {
                 const result = await Promise.race([
                     responsePromise,
-                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration))
+                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration[this.currentTask]))
                 ]);
 
                 if (result) {
@@ -479,77 +489,73 @@ async runPracticeTrials() {
         const isStopTrial = trials[i];
         const currentTrialSSD = this.currentSSD; 
         
+        this.stimulusContainer.style.display = 'block';
         this.stimulusContainer.textContent = "↑";
         this.stimulusContainer.style.color = "black";
         const trialStartTime = Date.now();
+        
         this.isWaitingForResponse = true;
         let responseReceived = false;
-        let stopSignalTimer = null;
-        let stopSignalShown = false;
 
         const responsePromise = new Promise(resolve => {
+            this.currentResolve = resolve;
+
             const handleSpace = (event) => {
                 if (event.code === 'Space' && this.isWaitingForResponse) {
-                    document.removeEventListener('keydown', handleSpace);
                     responseReceived = true;
-                    const responseTime = Date.now() - trialStartTime;
-                    
-                    if (isStopTrial && responseTime >= currentTrialSSD && !stopSignalShown) {
-
-                        clearTimeout(stopSignalTimer);
-                        this.stimulusContainer.textContent = "X";
-                        this.stimulusContainer.style.color = "red";
-                        stopSignalShown = true;
-                    }
-                    
                     resolve({ time: Date.now() });
                 }
             };
             document.addEventListener('keydown', handleSpace);
-            
+
+            // ניקוי אוטומטי של ה-event listener
+            setTimeout(() => {
+                document.removeEventListener('keydown', handleSpace);
+            }, config.goDuration.practice);
+        });
+
+        try {
             if (isStopTrial) {
-                stopSignalTimer = setTimeout(() => {
+                setTimeout(() => {
                     if (this.isWaitingForResponse) {
                         this.stimulusContainer.textContent = "X";
                         this.stimulusContainer.style.color = "red";
-                        stopSignalShown = true;
                     }
                 }, currentTrialSSD);
-            }
             
-            setTimeout(() => {
-                document.removeEventListener('keydown', handleSpace);
-                resolve(null);
-            }, config.goDuration);
-        });
-
-        if (isStopTrial) {
-            const response = await responsePromise;
+                const result = await Promise.race([
+                    responsePromise,
+                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration.practice))
+                ]);
             
-            if (!responseReceived) {
-                successfulStops++;
-                this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
-            } else {
-                this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
-                clearTimeout(stopSignalTimer);
-                
-               
-                setTimeout(() => {
+                if (!result) {
+                    successfulStops++;
+                    this.currentSSD = Math.min(config.maxSSD, this.currentSSD + config.stepSSD);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } else {
+                    // הנבדק לחץ כשלא היה צריך
+                    this.currentSSD = Math.max(config.minSSD, this.currentSSD - config.stepSSD);
+                    // מציג X אדום לזמן ארוך יותר
                     this.stimulusContainer.textContent = "X";
                     this.stimulusContainer.style.color = "red";
-                }, 10);
-            }
-        } else {
-            const response = await responsePromise;
-            if (responseReceived) {
-                correctResponses++;
-            }
-        }
+                    // נמתין 1000ms נוספות להצגת ה-X
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            } else {
+                const result = await Promise.race([
+                    responsePromise,
+                    new Promise(resolve => setTimeout(() => resolve(null), config.goDuration.practice))
+                ]);
 
-        // איפוס התצוגה
-        this.isWaitingForResponse = false;
-        this.stimulusContainer.style.color = "black";
-        this.stimulusContainer.textContent = "";
+                if (result) {
+                    correctResponses++;
+                }
+            }
+        } finally {
+            this.isWaitingForResponse = false;
+            this.stimulusContainer.style.color = "black";
+            this.stimulusContainer.textContent = "";
+        }
 
         // המתנה בין ניסיונות
         await new Promise(resolve => 
@@ -566,7 +572,6 @@ async runPracticeTrials() {
     Your performance:
     - You correctly pressed SPACE ${correctResponses} times out of ${totalGoTrials} opportunities
     - You successfully stopped ${successfulStops} times out of ${numStopTrials} stop signals
-
     `;
     
     this.instructions.textContent = instructions.practiceComplete.replace('%FEEDBACK%', feedbackText);
