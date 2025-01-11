@@ -148,6 +148,49 @@ class ExperimentManager {
         this.handleKeyPress = this.handleKeyPress.bind(this);
         this.handleInstructionKeyPress = this.handleInstructionKeyPress.bind(this);
         this.startButton.addEventListener('click', () => this.handleDemographicSubmit());
+        this.consecutiveMisses = 0;
+        this.modalShown = false;
+        
+        // Create modal element
+        this.modal = document.createElement('div');
+        this.modal.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: white;
+        padding: 40px;
+        border: 4px solid black;
+        border-radius: 10px;
+        z-index: 1000;
+        text-align: center;
+        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        font-size: 32px;
+        font-weight: bold;
+        min-width: 400px;
+        min-height: 200px;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        letter-spacing: 1px;
+    `;
+        this.modal.textContent = "Please try to respond faster!";
+        document.body.appendChild(this.modal);
+    
+    }
+
+    async showSpeedUpModal() {
+        if (this.modalShown) return;
+        
+        this.modalShown = true;
+        this.modal.style.display = 'flex';
+        
+        // Show modal for 2 seconds
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        this.modal.style.display = 'none';
+        this.modalShown = false;
     }
 
     handleDemographicSubmit() {
@@ -375,6 +418,20 @@ class ExperimentManager {
                 if (result) {
                     responseTime = result.time - trialStartTime;
                     correct = result.key === taskConfig.keys[stimulusType];
+                    this.consecutiveMisses = 0; // Reset consecutive misses on response
+                } else {
+                    // No response received
+                    this.consecutiveMisses++;
+                    
+                    // Check if we need to show the modal
+                    if (this.consecutiveMisses >= 5) {
+                        await this.showSpeedUpModal();
+                        this.stimulusContainer.style.display = 'none'; // Hide stimulus container
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Clean screen for 1 second
+                        this.stimulusContainer.style.display = 'block'; // Show stimulus container again
+                        this.keyReminder.style.display = 'block';      // Show key reminder again
+                        this.consecutiveMisses = 0; // Reset after showing modal
+                    }
                 }
             }
         } finally {
@@ -483,7 +540,7 @@ async runPracticeTrials() {
     let correctResponses = 0;
     let successfulStops = 0;
     
-    this.currentSSD = config.initialSSD;
+    this.currentSSD = 300;
 
     for (let i = 0; i < practiceTrials; i++) {
         const isStopTrial = trials[i];
@@ -592,6 +649,10 @@ async runPracticeTrials() {
 cleanup() {
     document.removeEventListener('keydown', this.handleInstructionKeyPress);
     document.removeEventListener('keydown', this.handleKeyPress);
+
+    if (this.modal && this.modal.parentNode) {
+        this.modal.parentNode.removeChild(this.modal);
+    }
 }
 }
 
